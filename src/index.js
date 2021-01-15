@@ -134,6 +134,7 @@ class Game extends React.Component {
             }],
             turn: "white",
             chosen: null,
+            moveNumber: 0,
         }
     }
     whitePromotion(i,squares) {
@@ -223,12 +224,32 @@ class Game extends React.Component {
         }        
         return file;
     }
-    changeTurn() {
+    getEnpassantRank(i) {
+        let moves = chess.moves({square:coords[this.state.chosen], verbose:true});
+        var rank = '';
+        for(var j=0; j < moves.length; j++) {
+            if(moves[j].flags.includes('e')) {
+                var rankInt =parseInt( moves[j].to.charAt(1));
+                if (this.state.turn === 'white') {
+                    rankInt = rankInt - 1;
+                } else {
+                    rankInt = rankInt + 1;
+                }
+            }
+        }        
+        return rankInt+'';
+    }
+    changeTurn(squares) {
         if(this.state.turn === "white") {
             this.setState({turn: "black"});
         } else if (this.state.turn === "black") {
             this.setState({turn: "white"});
         }
+        const history = this.state.history;
+        this.setState({moveNumber: this.state.moveNumber+1});
+        this.setState({history: history.concat([{
+            squares: squares,
+        }])});
     }
     handleClick(i) {
         const history = this.state.history;
@@ -236,7 +257,6 @@ class Game extends React.Component {
         const squares = current.squares.slice();
 
 
-        console.log(chess.moves());
         /*
         Set flags for choosing a square. First click chooses a square,
         second chooses where to move
@@ -255,7 +275,6 @@ class Game extends React.Component {
         If the square is empty and a square has been chosen.. 
         */
         } else if (squares[i] === null && this.state.chosen !== null) {
-            console.log(this.state.chosen);
             /* Chosen piece in algebraic notation */
             const moved = squares[this.state.chosen].charAt(1) !== 'p' ? squares[this.state.chosen].charAt(1) : '';
             //If two pieces can move to the same square, there may be possible ambiguity,
@@ -265,18 +284,17 @@ class Game extends React.Component {
             const movedVerbose = moved + coords[this.state.chosen];
             /* Chosen square to move the piece to */
             const tosquare = coords[i];
-            console.log(moved+tosquare);
             /* Promotion */
             if(this.whitePromotion(i,squares) ) {
                 squares[i] = 'wQ';
                 squares[this.state.chosen] = null;
-                this.changeTurn();
+                this.changeTurn(squares);
                 chess.move(coords[i]+'='+'Q');
             }
             else if(this.blackPromotion(i,squares) ) {
                 squares[i] = 'bQ';
                 squares[this.state.chosen] = null;
-                this.changeTurn();
+                this.changeTurn(squares);
                 chess.move(coords[i]+'='+'Q');
             }
             /* Castling for white */
@@ -284,14 +302,14 @@ class Game extends React.Component {
                 squares[i] = squares[this.state.chosen];
                 squares[63] = null;
                 squares[61] = 'wR';
-                this.changeTurn();
+                this.changeTurn(squares);
                 chess.move('O-O');
             }
             else if(this.castlingLongWhite(i,squares)) {
                 squares[i] = squares[this.state.chosen];
                 squares[56] = null;
                 squares[59] = 'wR';
-                this.changeTurn();
+                this.changeTurn(squares);
                 chess.move('O-O-O');
             }
             /* 
@@ -308,21 +326,19 @@ class Game extends React.Component {
                 squares[i] = squares[this.state.chosen];
                 squares[0] = null;
                 squares[3] = 'bR';
-                this.changeTurn();
+                this.changeTurn(squares);
                 chess.move('O-O-O');
             }
             //Handling en passant
-            else if(this.enpassant(i)&&this.state.turn==="white" ) {
+            else if(this.enpassant(i)) {
                 let rank = parseInt(coords[i].charAt(1));
-                let rankOfTakenPawn = rank - 1;
+                let rankOfTakenPawn = this.getEnpassantRank(i);
                 let fileOfTakenPawn = this.getEnpassantFile(i);
 
-                let rankOfTakenPawnChar = rankOfTakenPawn + '';
-                console.log(fileOfTakenPawn+rankOfTakenPawnChar);
-                squares[coords.indexOf(fileOfTakenPawn+rankOfTakenPawnChar) ] = null;
+                squares[coords.indexOf(fileOfTakenPawn+rankOfTakenPawn)] = null;
                 squares[i] = squares[this.state.chosen];
                 squares[this.state.chosen] = null;
-                this.changeTurn();
+                this.changeTurn(squares);
                 chess.move(movedVerbose+'x'+tosquare, {sloppy: true});
             }
             /*
@@ -333,7 +349,7 @@ class Game extends React.Component {
                    ||this.emptySquare(i,squares,movedAmbiguousRank,tosquare) ) {
                 squares[i] = squares[this.state.chosen];
                 squares[this.state.chosen] = null;
-                this.changeTurn();
+                this.changeTurn(squares);
                 chess.move(movedVerbose+tosquare, {sloppy: true});
             }
         /*
@@ -347,7 +363,6 @@ class Game extends React.Component {
             const movedAmbiguousRank = moved + coords[this.state.chosen].charAt(1);
             const movedVerbose = moved + coords[this.state.chosen];
             let tosquare = coords[i];
-            console.log(moved+'x'+tosquare)
             if(this.takesPiece(i,squares,moved,tosquare)
                ||this.takesPiece(i,squares,movedAmbiguousFile,tosquare)
                ||this.takesPiece(i,squares,movedAmbiguousRank,tosquare)
@@ -355,24 +370,43 @@ class Game extends React.Component {
 
                 squares[i] = squares[this.state.chosen];
                 squares[this.state.chosen] = null;
-                this.changeTurn();
+                this.changeTurn(squares);
                 chess.move(movedVerbose+'x'+tosquare,{sloppy: true});
 
                 
             }     
         }
-        this.setState({history: history.concat([{
-            squares: squares,
-        }])});
+
+        console.log(this.state.moveNumber);
         if (chess.game_over()) {
             this.setState({squares: Array(64).fill(null)})
             this.setState({turn: "Game Over"})
         }
     }
+    previousMove(moveN) {
+        const history = this.state.history;
+        if(moveN === 0){
+        } else {
+            this.setState({moveNumber: moveN-1});
+        }
+        
+    }
+    nextMove(moveN) {
+        const history = this.state.history;
+        if(moveN === history.length-1 ) {
+            
+        }else {
+            this.setState({moveNumber: moveN+1});
+        }
+    }
     render() {
         const history = this.state.history;
-        const current = history[history.length-1];
+        const moveN  = this.state.moveNumber;
+        const current = history[moveN];
+        console.log("movenumber in render " + this.state.moveNumber);
+        console.log("history length " + history.length);
         var status = "Next player: " + this.state.turn;
+        //var scrollGame = 
         return (
         <div className="game">
             <div className="game-board">
@@ -382,7 +416,10 @@ class Game extends React.Component {
             </div>
             <div className="game-info">
                 <div>{status}</div>
-                <ol>{/* TODO */}</ol>
+                <ol>
+                <li><button onClick={() => this.previousMove(moveN)}> Previous move</button></li>
+                <li><button onClick={() => this.nextMove(moveN)}>Next move</button> </li>
+                </ol>
             </div>
         </div>
     );
